@@ -2,6 +2,7 @@ package com.aure.clustertune.ui
 
 import android.view.KeyEvent
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -103,10 +104,22 @@ private fun TunerFrequencyCard(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val stock = valueIndex >= maxIndex
-    val sliderColor = if (stock) colorScheme.onSurfaceVariant.copy(alpha = 0.58f) else colorScheme.primary
+    var sliderFocused by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(20.dp)
+    val highlighted = controllerEnabled && sliderFocused
+    val sliderColor = when {
+        highlighted -> colorScheme.primary
+        stock -> colorScheme.onSurfaceVariant.copy(alpha = 0.58f)
+        else -> colorScheme.primary
+    }
     CtRowSurface(
+        modifier = if (highlighted) {
+            Modifier
+                .background(colorScheme.primaryContainer.copy(alpha = 0.62f), shape)
+                .border(2.dp, colorScheme.primary, shape)
+        } else Modifier,
         minimumHeight = 62.dp,
-        shape = RoundedCornerShape(20.dp),
+        shape = shape,
         contentPadding = PaddingValues(0.dp),
     ) {
         CompositionLocalProvider(
@@ -166,6 +179,7 @@ private fun TunerFrequencyCard(
                             if (controllerFocus != null) Modifier.focusRequester(controllerFocus) else Modifier,
                         ),
                         controllerEnabled = controllerEnabled,
+                        onFocusChange = { sliderFocused = it },
                     )
                     androidx.compose.material3.Text(
                         text = selectedLabel,
@@ -190,6 +204,7 @@ private fun TunerFrequencySlider(
     onIndexChange: (Int) -> Unit,
     modifier: Modifier = Modifier,
     controllerEnabled: Boolean,
+    onFocusChange: (Boolean) -> Unit,
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val sliderColor = if (valueIndex >= maxIndex) colorScheme.onSurfaceVariant.copy(alpha = 0.58f) else colorScheme.primary
@@ -203,7 +218,7 @@ private fun TunerFrequencySlider(
         modifier = modifier
             .heightIn(min = 48.dp)
             .then(
-                if (controllerEnabled) Modifier.tunerFocusOutline().onPreviewKeyEvent {
+                if (controllerEnabled) Modifier.onFocusChanged { onFocusChange(it.isFocused) }.onPreviewKeyEvent {
                     val event = it.nativeKeyEvent
                     val step = when (event.keyCode) {
                         KeyEvent.KEYCODE_DPAD_LEFT -> -1
@@ -330,7 +345,7 @@ internal fun Modifier.tunerControllerAction(enabled: Boolean, onClick: () -> Uni
 private fun Modifier.tunerFocusOutline(): Modifier = composed {
     var focused by remember { mutableStateOf(false) }
     val outline = if (focused) {
-        Modifier.border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(10.dp))
+        Modifier.border(3.dp, MaterialTheme.colorScheme.inverseSurface, RoundedCornerShape(50))
     } else Modifier
     onFocusChanged { focused = it.isFocused }.then(outline)
 }
