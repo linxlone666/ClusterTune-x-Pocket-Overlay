@@ -14,6 +14,8 @@ ClusterTune Controller adds gamepad navigation to the profile picker. Open it fr
 
 * **D-pad Up/Down** moves between profiles, and **A** applies the highlighted profile.
 * **L1** opens Profiles, and **R1** opens the custom Tuner.
+* **Y** toggles App profile when the picker has a foreground app to assign.
+* In Tuner, use the **D-pad** to move between controls and **Left/Right** on a slider to change its frequency. Press **A** on Apply to use the staged values.
 * **B** or **Back** closes the picker.
 
 Use one tuner at a time. This fork has its own Android package and stores its profiles separately. Export profiles from the original app and import them in the fork if you want to bring them over.

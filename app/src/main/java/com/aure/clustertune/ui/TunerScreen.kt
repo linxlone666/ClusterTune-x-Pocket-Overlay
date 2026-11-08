@@ -474,6 +474,7 @@ fun CompactOverlayScreen(
     val colorScheme = MaterialTheme.colorScheme
     val profiles = profilesForCompactPicker(state.displayProfiles)
     val pickerFocus = remember { FocusRequester() }
+    val tunerFirstFocus = remember { FocusRequester() }
     val windowFocused = LocalWindowInfo.current.isWindowFocused
     val assignment = contextPackageName?.let { packageName ->
         state.appProfileAssignments.firstOrNull { it.packageName == packageName }
@@ -577,6 +578,11 @@ fun CompactOverlayScreen(
     var controllerIndex by remember { mutableIntStateOf(-1) }
     val highlightedIndex = (if (controllerIndex < 0) initialIndex else controllerIndex).coerceAtMost(lastIndex)
 
+    fun setAppProfileEnabled(enabled: Boolean) {
+        appProfileEnabled = enabled
+        if (!enabled) onAppProfileAssignmentChange?.invoke(null, null, null, null)
+    }
+
     fun chooseProfile(profile: PerformanceProfile) {
         stagedProfile = profile
         stagedCustomValues = profile.maxFrequencies
@@ -585,9 +591,10 @@ fun CompactOverlayScreen(
         onApplyProfile(profile, appProfileEnabled)
     }
 
-    LaunchedEffect(controllerFocus, windowFocused, effectiveMode) {
+    val tunerHasSliders = effectiveMode == CompactOverlayMode.TUNER && state.policies.isNotEmpty()
+    LaunchedEffect(controllerFocus, windowFocused, effectiveMode, tunerHasSliders) {
         if (controllerFocus && windowFocused) {
-            pickerFocus.requestFocus()
+            if (tunerHasSliders) tunerFirstFocus.requestFocus() else pickerFocus.requestFocus()
         }
     }
     val controllerModifier = if (controllerFocus) {
@@ -608,6 +615,10 @@ fun CompactOverlayScreen(
                         }
                         if (tab != effectiveMode) onModeChange(tab)
                     }
+                    true
+                }
+                event.keyCode == KeyEvent.KEYCODE_BUTTON_Y && canAssign && showAppProfileToggle -> {
+                    if (released) setAppProfileEnabled(!appProfileEnabled)
                     true
                 }
                 effectiveMode != CompactOverlayMode.PROFILES || lastIndex < 0 -> false
@@ -677,15 +688,14 @@ fun CompactOverlayScreen(
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         if (canAssign && showAppProfileToggle) {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Text("App profile", style = MaterialTheme.typography.labelMedium, color = colorScheme.onSurface)
+                                Text(
+                                    if (controllerFocus) "App profile (Y)" else "App profile",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = colorScheme.onSurface,
+                                )
                                 CtSwitch(
                                     checked = appProfileEnabled,
-                                    onCheckedChange = { enabled ->
-                                        appProfileEnabled = enabled
-                                        if (!enabled) {
-                                            onAppProfileAssignmentChange?.invoke(null, null, null, null)
-                                        }
-                                    },
+                                    onCheckedChange = ::setAppProfileEnabled,
                                     modifier = Modifier
                                         .testTag(CompactOverlayTestTags.APP_PROFILE_SWITCH)
                                         .scale(0.78f),
@@ -788,6 +798,7 @@ fun CompactOverlayScreen(
                         stripUnderclockSuffix = true,
                         applyingProfileId = applyingProfileId,
                         compact = true,
+                        controllerEnabled = controllerFocus,
                     )
                     PolicyEditorSection(
                         state = state.copy(currentValues = stagedCustomValues, currentGpuMaxFrequencyHz = stagedGpuValue),
@@ -797,6 +808,8 @@ fun CompactOverlayScreen(
                         },
                         onGpuValueChange = { stagedGpuValue = it },
                         compactMode = true,
+                        controllerEnabled = controllerFocus,
+                        firstSliderFocus = tunerFirstFocus.takeIf { controllerFocus },
                     )
                 }
             } else {
@@ -835,18 +848,23 @@ fun CompactOverlayScreen(
                     horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    TextButton(onClick = onDismissRequest) { Text("Cancel") }
+                    val canApply = state.policies.isNotEmpty() && state.isPrivilegedHostAvailable
+                    val applyDraft = {
+                        onApplyCurrent(
+                            state.copy(currentValues = stagedCustomValues, currentGpuMaxFrequencyHz = stagedGpuValue),
+                            stagedProfile.takeUnless { customDraft },
+                            stagedCustomValues.takeIf { customDraft },
+                            appProfileEnabled,
+                        )
+                    }
+                    TextButton(
+                        onClick = onDismissRequest,
+                        modifier = Modifier.tunerControllerAction(controllerFocus, onDismissRequest),
+                    ) { Text("Cancel") }
                     Button(
-                        onClick = {
-                            onApplyCurrent(
-                                state.copy(currentValues = stagedCustomValues, currentGpuMaxFrequencyHz = stagedGpuValue),
-                                stagedProfile.takeUnless { customDraft },
-                                stagedCustomValues.takeIf { customDraft },
-                                appProfileEnabled,
-                            )
-                        },
-                        enabled = state.policies.isNotEmpty() && state.isPrivilegedHostAvailable,
-                        modifier = Modifier.height(30.dp),
+                        onClick = applyDraft,
+                        enabled = canApply,
+                        modifier = Modifier.height(30.dp).tunerControllerAction(controllerFocus && canApply, applyDraft),
                         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
                     ) { Text("Apply") }
                 }
@@ -2714,6 +2732,7 @@ private fun ProfileChipSelector(
     stripUnderclockSuffix: Boolean = false,
     applyingProfileId: String? = null,
     compact: Boolean = false,
+    controllerEnabled: Boolean = false,
 ) {
     val listState = rememberLazyListState()
     LaunchedEffect(state.selectedDisplayProfileId, state.isManualSelection, state.displayProfiles) {
@@ -2748,6 +2767,7 @@ private fun ProfileChipSelector(
                     applying = applyingProfileId == profile.id,
                     onClick = { onApplyProfile(profile) },
                     compact = compact,
+                    controllerEnabled = controllerEnabled,
                 )
             }
             if (state.isManualSelection) {
@@ -2758,6 +2778,7 @@ private fun ProfileChipSelector(
                         isSelected = true,
                         onClick = onClearSelection,
                         compact = compact,
+                        controllerEnabled = controllerEnabled,
                     )
                 }
             }
@@ -2792,10 +2813,12 @@ private fun ProfileSelectorChip(
     applying: Boolean = false,
     onClick: () -> Unit,
     compact: Boolean = false,
+    controllerEnabled: Boolean = false,
 ) {
     AssistChip(
         onClick = onClick,
-        modifier = if (compact) Modifier.height(28.dp) else Modifier,
+        modifier = (if (compact) Modifier.height(28.dp) else Modifier)
+            .tunerControllerAction(controllerEnabled, onClick),
         colors = when {
             isApplied -> AssistChipDefaults.assistChipColors(
                 containerColor = MaterialTheme.colorScheme.primaryContainer,
@@ -2838,19 +2861,23 @@ private fun PolicyEditorSection(
     onPolicyValueChange: (CpuPolicyInfo, Int) -> Unit,
     onGpuValueChange: (Int) -> Unit = {},
     compactMode: Boolean,
+    controllerEnabled: Boolean = false,
+    firstSliderFocus: FocusRequester? = null,
 ) {
     if (state.policies.isEmpty()) {
         EmptyState(state)
         return
     }
 
-    state.policies.forEach { policy ->
+    state.policies.forEachIndexed { index, policy ->
         TunerPolicyCard(
             policy = policy,
             selectedValue = state.currentValues[policy.id] ?: policy.currentMaxFreq,
             actualValue = state.actualValues[policy.id] ?: policy.currentMaxFreq,
             onValueChanged = { onPolicyValueChange(policy, it) },
             compactMode = compactMode,
+            controllerEnabled = controllerEnabled,
+            controllerFocus = firstSliderFocus.takeIf { index == 0 },
             displayFrequenciesAsPercent = displayFrequenciesAsPercent,
         )
     }
@@ -2861,6 +2888,7 @@ private fun PolicyEditorSection(
             actualValue = state.actualGpuMaxFrequencyHz ?: gpuPolicy.currentMaxFrequencyHz,
             onValueChanged = onGpuValueChange,
             compactMode = compactMode,
+            controllerEnabled = controllerEnabled,
         )
     }
 }

@@ -1,6 +1,9 @@
 package com.aure.clustertune.ui
 
+import android.view.KeyEvent
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.border
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
@@ -18,8 +21,17 @@ import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -47,6 +59,8 @@ internal fun TunerPolicyCard(
     compactMode: Boolean = false,
     displayFrequenciesAsPercent: Boolean = false,
     actualValue: Int = selectedValue,
+    controllerEnabled: Boolean = false,
+    controllerFocus: FocusRequester? = null,
 ) {
     val supported = policy.supportedFrequencies.filter { it <= policy.selectableMaxFreq }.ifEmpty { listOf(policy.selectableMaxFreq) }
     val displaySelectedValue = policy.clampToWritableMax(selectedValue)
@@ -70,6 +84,8 @@ internal fun TunerPolicyCard(
         maxIndex = supported.lastIndex,
         onIndexChange = { index -> onValueChanged(supported[index]) },
         compactMode = compactMode,
+        controllerEnabled = controllerEnabled,
+        controllerFocus = controllerFocus,
     )
 }
 
@@ -82,6 +98,8 @@ private fun TunerFrequencyCard(
     maxIndex: Int,
     onIndexChange: (Int) -> Unit,
     compactMode: Boolean,
+    controllerEnabled: Boolean,
+    controllerFocus: FocusRequester? = null,
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val stock = valueIndex >= maxIndex
@@ -144,7 +162,10 @@ private fun TunerFrequencyCard(
                         valueIndex = valueIndex,
                         maxIndex = maxIndex,
                         onIndexChange = onIndexChange,
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1f).then(
+                            if (controllerFocus != null) Modifier.focusRequester(controllerFocus) else Modifier,
+                        ),
+                        controllerEnabled = controllerEnabled,
                     )
                     androidx.compose.material3.Text(
                         text = selectedLabel,
@@ -168,6 +189,7 @@ private fun TunerFrequencySlider(
     maxIndex: Int,
     onIndexChange: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    controllerEnabled: Boolean,
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val sliderColor = if (valueIndex >= maxIndex) colorScheme.onSurfaceVariant.copy(alpha = 0.58f) else colorScheme.primary
@@ -180,6 +202,21 @@ private fun TunerFrequencySlider(
     BoxWithConstraints(
         modifier = modifier
             .heightIn(min = 48.dp)
+            .then(
+                if (controllerEnabled) Modifier.tunerFocusOutline().onPreviewKeyEvent {
+                    val event = it.nativeKeyEvent
+                    val step = when (event.keyCode) {
+                        KeyEvent.KEYCODE_DPAD_LEFT -> -1
+                        KeyEvent.KEYCODE_DPAD_RIGHT -> 1
+                        else -> 0
+                    }
+                    if (step != 0 && event.action == KeyEvent.ACTION_DOWN) {
+                        val target = (valueIndex + step).coerceIn(0, maxIndex)
+                        if (target != valueIndex) onIndexChange(target)
+                    }
+                    step != 0
+                }.focusable() else Modifier,
+            )
             .semantics {
                 val rangeMax = maxIndex.coerceAtLeast(0).toFloat()
                 progressBarRangeInfo = ProgressBarRangeInfo(
@@ -258,6 +295,7 @@ internal fun TunerGpuPolicyCard(
     actualValue: Int = selectedValue,
     onValueChanged: (Int) -> Unit,
     compactMode: Boolean = false,
+    controllerEnabled: Boolean = false,
 ) {
     val supported = policy.supportedFrequenciesHz.filter { it <= policy.selectableMaxFrequencyHz }
         .ifEmpty { listOf(policy.selectableMaxFrequencyHz) }.distinct().sorted()
@@ -274,7 +312,27 @@ internal fun TunerGpuPolicyCard(
             onValueChanged(supported[index.coerceIn(0, supported.lastIndex)])
         },
         compactMode = compactMode,
+        controllerEnabled = controllerEnabled,
     )
+}
+
+internal fun Modifier.tunerControllerAction(enabled: Boolean, onClick: () -> Unit): Modifier =
+    if (enabled) tunerFocusOutline().onPreviewKeyEvent {
+        val event = it.nativeKeyEvent
+        if (event.keyCode != KeyEvent.KEYCODE_BUTTON_A) {
+            false
+        } else {
+            if (event.action == KeyEvent.ACTION_UP && !event.isCanceled) onClick()
+            true
+        }
+    } else this
+
+private fun Modifier.tunerFocusOutline(): Modifier = composed {
+    var focused by remember { mutableStateOf(false) }
+    val outline = if (focused) {
+        Modifier.border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(10.dp))
+    } else Modifier
+    onFocusChanged { focused = it.isFocused }.then(outline)
 }
 
 internal fun formatGpuFrequency(valueHz: Int, policy: GpuPolicyInfo? = null): String {
