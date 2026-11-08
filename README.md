@@ -60,7 +60,7 @@ App detection uses Android task-change notifications inside the same privileged 
 
 ## Install
 
-Download [v1.3.0](https://github.com/AurelioB/ClusterTune/releases/tag/v1.3.0) and install `ClusterTune-v1.3.0.apk`.
+Download the APK from [ClusterTune Controller releases](https://github.com/linxlone666/ClusterTune/releases/latest) and install it.
 
 Android may ask the browser or file manager for permission to install the APK. **Install downloaded updates** is separate and optional. It is only needed for updates installed from inside the app.
 

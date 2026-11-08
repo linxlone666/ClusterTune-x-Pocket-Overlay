@@ -35,8 +35,8 @@ android {
         applicationId = "app.pocketoverlay.clustertune"
         minSdk = 31
         targetSdk = 34
-        versionCode = 315
-        versionName = "1.4.0"
+        versionCode = 10500
+        versionName = "1.5.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
