@@ -54,11 +54,12 @@ class OverlayWindowController(
         type: OverlayType,
         view: View,
         onBackPressed: () -> Unit,
+        controllerFocus: Boolean = false,
     ) {
         dismissModal(restoreEdgeHandle = false)
         detachEdgeHandle()
         val backHandler = if (
-            modalWindowFlags() and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE == 0
+            modalWindowFlags(controllerFocus) and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE == 0
         ) {
             ModalOverlayBackHandler(view, onBackPressed)
         } else {
@@ -66,7 +67,7 @@ class OverlayWindowController(
         }
         try {
             backHandler?.install()
-            windowManager.addView(view, modalLayoutParams())
+            windowManager.addView(view, modalLayoutParams(controllerFocus))
             modalType = type
             modalView = view
             modalBackHandler = backHandler
@@ -193,12 +194,12 @@ class OverlayWindowController(
         edgeHandleAttached = false
     }
 
-    private fun modalLayoutParams(): WindowManager.LayoutParams {
+    private fun modalLayoutParams(controllerFocus: Boolean): WindowManager.LayoutParams {
         return WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            modalWindowFlags(),
+            modalWindowFlags(controllerFocus),
             PixelFormat.TRANSLUCENT,
         ).apply {
             gravity = Gravity.CENTER
@@ -357,9 +358,9 @@ internal fun shouldDismissOverlayOnKeyEvent(
         !canceled
 }
 
-internal fun modalWindowFlags(): Int {
-    return WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-        WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+internal fun modalWindowFlags(controllerFocus: Boolean = false): Int {
+    val focusFlag = if (controllerFocus) 0 else WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+    return focusFlag or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
         WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
         WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
 }

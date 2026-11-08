@@ -34,6 +34,17 @@
         </activity>
 
         <activity
+            android:name=".ProfilePickerShortcutActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:theme="@style/Theme.ClusterTune.TileTrampoline">
+            <intent-filter>
+                <action android:name="app.pocketoverlay.clustertune.OPEN_PROFILE_PICKER" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <activity
             android:name=".TileControlActivity"
             android:excludeFromRecents="true"
             android:exported="true"

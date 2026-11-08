@@ -19,6 +19,13 @@ class OverlayWindowFlagsTest {
     }
 
     @Test
+    fun pickerCanTakeControllerFocusWithoutChangingItsLayoutFlags() {
+        val flags = modalWindowFlags(controllerFocus = true)
+        assertFalse(flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE != 0)
+        assertCommonFlagsPresent(flags)
+    }
+
+    @Test
     fun performanceHudKeepsTheUnderlyingAppFocusedButAcceptsSliderTouches() {
         val flags = performanceHudWindowFlags()
 

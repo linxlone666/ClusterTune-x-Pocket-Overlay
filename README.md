@@ -1,6 +1,6 @@
 <h1>
   <img src="docs/app-icon.svg" alt="" width="48" align="left">
-  ClusterTune
+  ClusterTune Controller
 </h1>
 
 ![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/AurelioB/ClusterTune/total)
@@ -9,6 +9,14 @@
 <a href="https://ko-fi.com/J3J518XVKR" target="_blank"><img height="36" style="border:0px;height:36px;" src="https://storage.ko-fi.com/cdn/kofi6.png?v=6" border="0" alt="Buy Me a Coffee at ko-fi.com" /></a>
 
 ClusterTune sets maximum CPU and GPU frequencies on Android handhelds.
+
+ClusterTune Controller adds gamepad navigation to the profile picker. Open it from Pocket Overlay's **ClusterTune profile picker** action or set the ClusterTune Quick Settings tile to **Profile picker**. The Pocket Overlay shortcut opens this fork directly.
+
+* **D-pad Up/Down** moves between profiles, and **A** applies the highlighted profile.
+* **L1** opens Profiles, and **R1** opens the custom Tuner.
+* **B** or **Back** closes the picker.
+
+Use one tuner at a time. This fork has its own Android package and stores its profiles separately. Export profiles from the original app and import them in the fork if you want to bring them over.
 
 > [!WARNING]
 > Changing CPU or GPU limits can affect stability, performance, temperature, and battery life. Start with tested values and use **Stock** to restore normal limits.

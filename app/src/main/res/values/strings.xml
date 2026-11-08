@@ -1,7 +1,7 @@
 <resources>
-    <string name="app_name">ClusterTune</string>
-    <string name="tile_label">ClusterTune</string>
-    <string name="tile_title">ClusterTune</string>
+    <string name="app_name">ClusterTune Controller</string>
+    <string name="tile_label">ClusterTune Controller</string>
+    <string name="tile_title">ClusterTune Controller</string>
     <string name="tile_state_manual">Manual</string>
     <string name="tile_state_unavailable">Unavailable</string>
     <string name="settings_title">Settings</string>

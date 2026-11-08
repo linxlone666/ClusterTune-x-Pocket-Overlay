@@ -32,7 +32,7 @@ android {
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.aure.clustertune"
+        applicationId = "app.pocketoverlay.clustertune"
         minSdk = 31
         targetSdk = 34
         versionCode = 315

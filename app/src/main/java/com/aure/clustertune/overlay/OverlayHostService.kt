@@ -670,17 +670,19 @@ class OverlayHostService : LifecycleService(), ViewModelStoreOwner, SavedStateRe
     private fun showCompactProfilePickerOverlay(
         foregroundApp: ForegroundAppInfo? = null,
         initialSettings: AppSettings,
+        controllerFocus: Boolean,
     ): Boolean {
         if (!OverlayPermission.canDrawOverlays(this)) {
             Log.w(TAG, "Overlay permission missing; cannot show compact profile picker overlay")
             dismissOverlay(OverlayType.COMPACT_PROFILE_PICKER)
             return false
         }
-        val view = buildCompactProfilePickerView(foregroundApp, initialSettings)
+        val view = buildCompactProfilePickerView(foregroundApp, initialSettings, controllerFocus)
         return runCatching {
             windowController.show(
                 type = OverlayType.COMPACT_PROFILE_PICKER,
                 view = view,
+                controllerFocus = controllerFocus,
                 onBackPressed = {
                     dismissOverlay(OverlayType.COMPACT_PROFILE_PICKER)
                 },
@@ -695,6 +697,7 @@ class OverlayHostService : LifecycleService(), ViewModelStoreOwner, SavedStateRe
     private fun buildCompactProfilePickerView(
         foregroundApp: ForegroundAppInfo?,
         initialSettings: AppSettings,
+        controllerFocus: Boolean,
     ): ComposeView {
         val initialExternal = foregroundApp?.takeUnless { it.packageName in foregroundIgnoredPackages }
         compactProfilePickerForeground.value = initialExternal
@@ -714,6 +717,7 @@ class OverlayHostService : LifecycleService(), ViewModelStoreOwner, SavedStateRe
                             state = state,
                             autoTuneEnabled = settings.autoTuneEnabled,
                             applyingProfileId = applyingProfileId,
+                            controllerFocus = controllerFocus,
                             displayFrequenciesAsPercent = settings.displayFrequenciesAsPercent,
                             mode = overlayMode,
                             onModeChange = {
@@ -945,7 +949,7 @@ class OverlayHostService : LifecycleService(), ViewModelStoreOwner, SavedStateRe
                 assignments = assignments,
                 sessionToken = sessionToken,
             )
-            if (!showCompactProfilePickerOverlay(initial, initialSettings)) {
+            if (!showCompactProfilePickerOverlay(initial, initialSettings, mode == CompactOverlayMode.PROFILES)) {
                 dismissOverlay(OverlayType.COMPACT_PROFILE_PICKER)
                 return@launch
             }

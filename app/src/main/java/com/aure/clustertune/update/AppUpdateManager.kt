@@ -121,7 +121,7 @@ class AppUpdateManager(
     companion object {
         private const val NETWORK_TIMEOUT_MS = 15_000
         const val DEFAULT_RELEASES_URL =
-            "https://api.github.com/repos/AurelioB/ClusterTune/releases"
+            "https://api.github.com/repos/linxlone666/ClusterTune/releases"
     }
 }
 

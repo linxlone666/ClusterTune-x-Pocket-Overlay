@@ -1,8 +1,13 @@
 package com.aure.clustertune.ui
 
 import android.graphics.drawable.Drawable
+import android.view.KeyEvent
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -92,10 +97,14 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
@@ -456,6 +465,7 @@ fun CompactOverlayScreen(
     showAppProfileToggle: Boolean = true,
     showAssignmentRemove: Boolean = false,
     onRemoveAssignment: (() -> Unit)? = null,
+    controllerFocus: Boolean = false,
 ) {
     val effectiveMode = if (!autoTuneEnabled && mode == CompactOverlayMode.AUTO_TUNE) CompactOverlayMode.PROFILES else mode
     LaunchedEffect(mode, autoTuneEnabled) {
@@ -463,6 +473,8 @@ fun CompactOverlayScreen(
     }
     val colorScheme = MaterialTheme.colorScheme
     val profiles = profilesForCompactPicker(state.displayProfiles)
+    val pickerFocus = remember { FocusRequester() }
+    val windowFocused = LocalWindowInfo.current.isWindowFocused
     val assignment = contextPackageName?.let { packageName ->
         state.appProfileAssignments.firstOrNull { it.packageName == packageName }
     }
@@ -559,9 +571,68 @@ fun CompactOverlayScreen(
         ?: listOfNotNull(assignment?.profileId, state.activeDisplayProfileId, state.lastAppliedDisplayProfileId)
             .firstOrNull { id -> profiles.any { it.id == id } }
 
+    val initialIndex = if (customDraft) 0 else profiles.indexOfFirst { it.id == selectedProfileId }.coerceAtLeast(0)
+    val customOffset = if (customDraft) 1 else 0
+    val lastIndex = profiles.lastIndex + customOffset
+    var controllerIndex by remember { mutableIntStateOf(-1) }
+    val highlightedIndex = (if (controllerIndex < 0) initialIndex else controllerIndex).coerceAtMost(lastIndex)
+
+    fun chooseProfile(profile: PerformanceProfile) {
+        stagedProfile = profile
+        stagedCustomValues = profile.maxFrequencies
+        stagedGpuValue = profile.gpuMaxFrequencyHz ?: state.currentGpuMaxFrequencyHz
+        customDraft = false
+        onApplyProfile(profile, appProfileEnabled)
+    }
+
+    LaunchedEffect(controllerFocus, windowFocused, effectiveMode) {
+        if (controllerFocus && windowFocused) {
+            pickerFocus.requestFocus()
+        }
+    }
+    val controllerModifier = if (controllerFocus) {
+        Modifier.onPreviewKeyEvent {
+            val event = it.nativeKeyEvent
+            val released = event.action == KeyEvent.ACTION_UP && !event.isCanceled
+            when {
+                event.keyCode == KeyEvent.KEYCODE_BUTTON_B || event.keyCode == KeyEvent.KEYCODE_BACK -> {
+                    if (released) onDismissRequest()
+                    true
+                }
+                event.keyCode == KeyEvent.KEYCODE_BUTTON_L1 || event.keyCode == KeyEvent.KEYCODE_BUTTON_R1 -> {
+                    if (released) {
+                        val tab = if (event.keyCode == KeyEvent.KEYCODE_BUTTON_L1) {
+                            CompactOverlayMode.PROFILES
+                        } else {
+                            CompactOverlayMode.TUNER
+                        }
+                        if (tab != effectiveMode) onModeChange(tab)
+                    }
+                    true
+                }
+                effectiveMode != CompactOverlayMode.PROFILES || lastIndex < 0 -> false
+                event.keyCode == KeyEvent.KEYCODE_DPAD_UP || event.keyCode == KeyEvent.KEYCODE_DPAD_DOWN -> {
+                    if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+                        val step = if (event.keyCode == KeyEvent.KEYCODE_DPAD_UP) -1 else 1
+                        controllerIndex = (highlightedIndex + step).coerceIn(0, lastIndex)
+                    }
+                    true
+                }
+                event.keyCode == KeyEvent.KEYCODE_BUTTON_A || event.keyCode == KeyEvent.KEYCODE_DPAD_CENTER -> {
+                    if (released) {
+                        if (customDraft && highlightedIndex == 0) onModeChange(CompactOverlayMode.TUNER)
+                        else profiles.getOrNull(highlightedIndex - customOffset)?.let(::chooseProfile)
+                    }
+                    true
+                }
+                else -> false
+            }
+        }.focusRequester(pickerFocus).focusable()
+    } else Modifier
+
     ScreenContainer(compactMode = true, showCompactScrim = false, compactFillHeight = false) {
         Column(
-            modifier = Modifier
+            modifier = controllerModifier
                 .fillMaxWidth()
                 .heightIn(max = LocalConfiguration.current.screenHeightDp.dp * 0.92f),
         ) {
@@ -667,23 +738,19 @@ fun CompactOverlayScreen(
                     if (customDraft) {
                         ProfileChoiceRow(
                             title = "Custom",
+                            highlighted = controllerFocus && highlightedIndex == 0,
                             selected = true,
                             applying = false,
                             onClick = { onModeChange(CompactOverlayMode.TUNER) },
                         )
                     }
-                    profiles.forEach { profile ->
+                    profiles.forEachIndexed { index, profile ->
                         ProfileChoiceRow(
                             title = profile.name,
+                            highlighted = controllerFocus && highlightedIndex == index + customOffset,
                             selected = selectedProfileId == profile.id,
                             applying = applyingProfileId == profile.id,
-                            onClick = {
-                                stagedProfile = profile
-                                stagedCustomValues = profile.maxFrequencies
-                                stagedGpuValue = profile.gpuMaxFrequencyHz ?: state.currentGpuMaxFrequencyHz
-                                customDraft = false
-                                onApplyProfile(profile, appProfileEnabled)
-                            },
+                            onClick = { chooseProfile(profile) },
                         )
                     }
                     if (profiles.isEmpty()) ProfilePickerEmptyOptionCard()
@@ -2028,14 +2095,18 @@ private fun CenteredModalSurface(
 }
 
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 private fun ProfileChoiceRow(
     title: String,
     selected: Boolean,
     applying: Boolean = false,
     onClick: () -> Unit,
     compact: Boolean = false,
+    highlighted: Boolean = false,
 ) {
     val colorScheme = MaterialTheme.colorScheme
+    val bringIntoView = remember { BringIntoViewRequester() }
+    LaunchedEffect(highlighted) { if (highlighted) bringIntoView.bringIntoView() }
     val rowShape = RoundedCornerShape(20.dp)
     val containerColor = colorScheme.surfaceContainerHigh.copy(alpha = 0.46f)
     val containerBrush = if (selected) {
@@ -2057,10 +2128,11 @@ private fun ProfileChoiceRow(
 
     Row(
         modifier = Modifier
+            .bringIntoViewRequester(bringIntoView)
             .fillMaxWidth()
             .heightIn(min = if (compact) 38.dp else 48.dp)
             .background(containerBrush, rowShape)
-            .border(BorderStroke(1.dp, borderColor), rowShape)
+            .border(if (highlighted) 3.dp else 1.dp, if (highlighted) colorScheme.primary else borderColor, rowShape)
             .clip(rowShape)
             .clickable(onClick = onClick)
             .padding(
