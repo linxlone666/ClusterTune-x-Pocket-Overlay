@@ -485,15 +485,8 @@ fun CompactOverlayScreen(
         localDisplayRefreshRateFps = localDisplayRefreshRateFps,
     )
     val canAssign = !contextPackageName.isNullOrBlank() && onAppProfileAssignmentChange != null
-    var appProfileEnabled by remember(
-        contextPackageName,
-        assignment?.profileId,
-        assignment?.customMaxFrequencies,
-        assignment?.customGpuMaxFrequencyHz,
-        assignment?.autoTuneTargetFps,
-    ) {
-        mutableStateOf(assignment != null)
-    }
+    var appProfileDraft by remember(contextPackageName) { mutableStateOf<Boolean?>(null) }
+    val appProfileEnabled = canAssign && (appProfileDraft ?: (assignment != null))
     // Keep the configured draft separate from the live effective value. If the
     // panel changes 120 -> 60 -> 120 while this dialog is open, the unsaved
     // 120 FPS preference returns instead of being silently rewritten.
@@ -579,8 +572,8 @@ fun CompactOverlayScreen(
     val highlightedIndex = (if (controllerIndex < 0) initialIndex else controllerIndex).coerceAtMost(lastIndex)
 
     fun setAppProfileEnabled(enabled: Boolean) {
-        appProfileEnabled = enabled
-        if (!enabled) onAppProfileAssignmentChange?.invoke(null, null, null, null)
+        appProfileDraft = enabled
+        if (!enabled && assignment != null) onAppProfileAssignmentChange?.invoke(null, null, null, null)
     }
 
     fun chooseProfile(profile: PerformanceProfile) {
@@ -735,6 +728,20 @@ fun CompactOverlayScreen(
                 }
             }
             CtDivider(Modifier.fillMaxWidth(), colorScheme.outlineVariant.copy(alpha = 0.48f))
+            if (showAppProfileToggle && appProfileEnabled && assignment == null &&
+                effectiveMode != CompactOverlayMode.AUTO_TUNE
+            ) {
+                Text(
+                    text = if (effectiveMode == CompactOverlayMode.TUNER) {
+                        "Apply to save these limits for this app."
+                    } else {
+                        "Choose a profile to save it for this app."
+                    },
+                    modifier = Modifier.padding(start = 16.dp, top = 8.dp, end = 16.dp),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = colorScheme.primary,
+                )
+            }
             if (effectiveMode == CompactOverlayMode.PROFILES) {
                 Column(
                     modifier = Modifier
@@ -880,7 +887,7 @@ fun CompactOverlayScreen(
                     Button(
                         onClick = {
                             autoTuneDraftTargetFps = effectiveAutoTuneDraftTargetFps
-                            appProfileEnabled = true
+                            appProfileDraft = true
                             onAppProfileAssignmentChange?.invoke(null, null, null, effectiveAutoTuneDraftTargetFps)
                             onDismissRequest()
                         },

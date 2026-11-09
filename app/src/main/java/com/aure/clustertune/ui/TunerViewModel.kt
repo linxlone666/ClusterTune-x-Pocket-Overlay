@@ -304,18 +304,16 @@ class TunerViewModel(
         customMaxFrequencies: Map<Int, Int> = emptyMap(),
         customGpuMaxFrequencyHz: Int? = null,
         autoTuneTargetFps: Int? = null,
-    ) {
-        repository.saveAppProfileAssignment(
-            AppProfileAssignment(
-                packageName = packageName,
-                appLabel = appLabel,
-                profileId = profileId,
-                customMaxFrequencies = customMaxFrequencies,
-                customGpuMaxFrequencyHz = customGpuMaxFrequencyHz,
-                autoTuneTargetFps = autoTuneTargetFps,
-            ),
-        )
-    }
+    ): Boolean = repository.saveAppProfileAssignment(
+        AppProfileAssignment(
+            packageName = packageName,
+            appLabel = appLabel,
+            profileId = profileId,
+            customMaxFrequencies = customMaxFrequencies,
+            customGpuMaxFrequencyHz = customGpuMaxFrequencyHz,
+            autoTuneTargetFps = autoTuneTargetFps,
+        ),
+    )
 
     suspend fun deleteAppProfileAssignmentAwait(packageName: String) {
         repository.deleteAppProfileAssignment(packageName)

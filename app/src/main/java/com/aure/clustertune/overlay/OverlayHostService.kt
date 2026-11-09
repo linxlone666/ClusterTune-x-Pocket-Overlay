@@ -1072,7 +1072,10 @@ class OverlayHostService : LifecycleService(), ViewModelStoreOwner, SavedStateRe
         foregroundApp: ForegroundAppInfo?,
     ) {
         val sessionToken = compactProfilePickerSessionToken
+        val pendingAssignmentChange = compactAssignmentMutationJob
         lifecycleScope.launch {
+            pendingAssignmentChange?.join()
+            if (sessionToken != compactProfilePickerSessionToken) return@launch
             runCompactProfilePickerMutationIfCurrent(
                 capturedForeground = foregroundApp,
                 ensureCurrent = {
@@ -1083,17 +1086,13 @@ class OverlayHostService : LifecycleService(), ViewModelStoreOwner, SavedStateRe
                 val applyingToken = assignmentProfile?.let { viewModel.beginApplyingProfile(it.id) }
                 try {
                     if (foregroundApp != null && appProfileEnabled) {
-                        viewModel.saveAppProfileAssignmentAwait(
-                            foregroundApp.packageName,
-                            foregroundApp.label,
-                            assignmentProfile?.id,
-                            customMaxFrequencies ?: emptyMap(),
-                            state.currentGpuMaxFrequencyHz.takeIf { assignmentProfile == null },
+                        saveFixedAppProfileFromOverlay(
+                            foregroundApp = foregroundApp,
+                            sessionToken = sessionToken,
+                            profileId = assignmentProfile?.id,
+                            customMaxFrequencies = customMaxFrequencies ?: emptyMap(),
+                            customGpuMaxFrequencyHz = state.currentGpuMaxFrequencyHz.takeIf { assignmentProfile == null },
                         )
-                        // The background coordinator is the sole app-profile
-                        // writer. Saving the assignment wakes it immediately and
-                        // lets it combine this target with apps on other displays.
-                        dismissOverlay(OverlayType.COMPACT_PROFILE_PICKER)
                         return@runCompactProfilePickerMutationIfCurrent
                     }
                     val handler = QuickTunerApplyHandler(
@@ -1126,7 +1125,10 @@ class OverlayHostService : LifecycleService(), ViewModelStoreOwner, SavedStateRe
         appProfileEnabled: Boolean,
     ) {
         val sessionToken = compactProfilePickerSessionToken
+        val pendingAssignmentChange = compactAssignmentMutationJob
         lifecycleScope.launch {
+            pendingAssignmentChange?.join()
+            if (sessionToken != compactProfilePickerSessionToken) return@launch
             runCompactProfilePickerMutationIfCurrent(
                 capturedForeground = foregroundApp,
                 ensureCurrent = {
@@ -1137,14 +1139,7 @@ class OverlayHostService : LifecycleService(), ViewModelStoreOwner, SavedStateRe
                 val applyingToken = viewModel.beginApplyingProfile(profile.id)
                 try {
                     if (foregroundApp != null && appProfileEnabled) {
-                        viewModel.saveAppProfileAssignmentAwait(
-                            foregroundApp.packageName,
-                            foregroundApp.label,
-                            profile.id,
-                        )
-                        // Applying is delegated to the event coordinator so
-                        // multi-display assignments produce one combined write.
-                        dismissOverlay(OverlayType.COMPACT_PROFILE_PICKER)
+                        saveFixedAppProfileFromOverlay(foregroundApp, sessionToken, profile.id)
                         return@runCompactProfilePickerMutationIfCurrent
                     }
                     val handler = QuickTunerApplyHandler(
@@ -1159,11 +1154,7 @@ class OverlayHostService : LifecycleService(), ViewModelStoreOwner, SavedStateRe
                             if (!ensureCurrentCompactProfilePickerTarget(app, sessionToken)) {
                                 return@onSuccess
                             }
-                            if (appProfileEnabled) {
-                                viewModel.saveAppProfileAssignmentAwait(app.packageName, app.label, profile.id)
-                            } else {
-                                viewModel.deleteAppProfileAssignmentAwait(app.packageName)
-                            }
+                            viewModel.deleteAppProfileAssignmentAwait(app.packageName)
                         }
                         dismissOverlay(OverlayType.COMPACT_PROFILE_PICKER)
                     }
@@ -1172,6 +1163,35 @@ class OverlayHostService : LifecycleService(), ViewModelStoreOwner, SavedStateRe
                 }
             }
         }
+    }
+
+    private suspend fun saveFixedAppProfileFromOverlay(
+        foregroundApp: ForegroundAppInfo,
+        sessionToken: Long,
+        profileId: String?,
+        customMaxFrequencies: Map<Int, Int> = emptyMap(),
+        customGpuMaxFrequencyHz: Int? = null,
+    ) {
+        // The background coordinator applies the saved assignment to the visible apps.
+        val saved = try {
+            viewModel.saveAppProfileAssignmentAwait(
+                foregroundApp.packageName,
+                foregroundApp.label,
+                profileId,
+                customMaxFrequencies,
+                customGpuMaxFrequencyHz,
+            )
+        } catch (error: java.io.IOException) {
+            Log.w(TAG, "Could not save the popup app profile", error)
+            false
+        }
+        if (sessionToken != compactProfilePickerSessionToken) return
+        if (!saved) {
+            SingleToast.show(applicationContext, "Couldn’t save this app profile. Try again.", Toast.LENGTH_SHORT)
+            return
+        }
+        SingleToast.show(applicationContext, "Saved app profile for ${foregroundApp.label}", Toast.LENGTH_SHORT)
+        dismissOverlay(OverlayType.COMPACT_PROFILE_PICKER)
     }
 
     private fun dismissOverlay(type: OverlayType? = null) {

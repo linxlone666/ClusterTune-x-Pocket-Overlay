@@ -1247,8 +1247,8 @@ class PerformanceRepository(
         profileStorage.deleteAppProfileAssignmentsForProfile(profileId)
     }
 
-    suspend fun saveAppProfileAssignment(assignment: AppProfileAssignment) {
-        if (assignment.packageName.isBlank() || !assignment.hasValidTarget) return
+    suspend fun saveAppProfileAssignment(assignment: AppProfileAssignment): Boolean {
+        if (assignment.packageName.isBlank() || !assignment.hasValidTarget) return false
         if (assignment.isAutoTune) {
             requireAutoTuneEnabled()
             profileStorage.saveAppProfileAssignment(
@@ -1259,7 +1259,7 @@ class PerformanceRepository(
                     customGpuMaxFrequencyHz = null,
                 ),
             )
-            return
+            return true
         }
         val state = observeState().first()
         if (assignment.isCustom) {
@@ -1269,8 +1269,8 @@ class PerformanceRepository(
             val validGpu = assignment.customGpuMaxFrequencyHz?.takeIf { value ->
                 state.gpuPolicy?.let { isValidGpuValue(it, value) } == true
             }
-            if (assignment.customGpuMaxFrequencyHz != null && validGpu == null) return
-            if (validValues.isEmpty() && validGpu == null) return
+            if (assignment.customGpuMaxFrequencyHz != null && validGpu == null) return false
+            if (validValues.isEmpty() && validGpu == null) return false
             profileStorage.saveAppProfileAssignment(
                 assignment.copy(
                     appLabel = assignment.appLabel.ifBlank { assignment.packageName },
@@ -1280,9 +1280,9 @@ class PerformanceRepository(
                     autoTuneTargetFps = null,
                 ),
             )
-            return
+            return true
         }
-        val profile = state.displayProfiles.firstOrNull { it.id == assignment.profileId } ?: return
+        val profile = state.displayProfiles.firstOrNull { it.id == assignment.profileId } ?: return false
         profileStorage.saveAppProfileAssignment(
             assignment.copy(
                 appLabel = assignment.appLabel.ifBlank { assignment.packageName },
@@ -1292,6 +1292,7 @@ class PerformanceRepository(
                 autoTuneTargetFps = null,
             ),
         )
+        return true
     }
 
     suspend fun deleteAppProfileAssignment(packageName: String) {

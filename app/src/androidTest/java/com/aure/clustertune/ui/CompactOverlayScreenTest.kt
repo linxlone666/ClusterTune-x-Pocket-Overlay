@@ -805,6 +805,43 @@ class CompactOverlayScreenTest {
     }
 
     @Test
+    fun reenablingAppProfile_keepsDraftAfterPendingRemovalFinishes() {
+        var pickerState by mutableStateOf(
+            state(
+                assignment = AppProfileAssignment(
+                    packageName = "com.example.game",
+                    appLabel = "Example game",
+                    profileId = "large",
+                ),
+            ),
+        )
+        var appliedAsAppProfile = false
+        composeRule.setContent {
+            MaterialTheme {
+                CompactOverlayScreen(
+                    state = pickerState,
+                    displayFrequenciesAsPercent = false,
+                    mode = CompactOverlayMode.PROFILES,
+                    onModeChange = {},
+                    onApplyProfile = { _, enabled -> appliedAsAppProfile = enabled },
+                    onApplyCurrent = { _, _, _, _ -> },
+                    onDismissRequest = {},
+                    onRefreshLiveValues = {},
+                    contextPackageName = "com.example.game",
+                    onAppProfileAssignmentChange = { _, _, _, _ -> },
+                )
+            }
+        }
+
+        val appProfileToggle = composeRule.onNodeWithTag(CompactOverlayTestTags.APP_PROFILE_SWITCH)
+        appProfileToggle.performClick()
+        appProfileToggle.performClick()
+        composeRule.runOnIdle { pickerState = pickerState.copy(appProfileAssignments = emptyList()) }
+        composeRule.onNodeWithText("Large").performClick()
+        composeRule.runOnIdle { assertTrue(appliedAsAppProfile) }
+    }
+
+    @Test
     fun matchingOffscreenProfile_isHighlightedAndScrolledIntoView() {
         val profiles = (0 until 12).map { index ->
             PerformanceProfile(
